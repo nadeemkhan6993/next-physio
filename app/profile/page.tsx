@@ -71,10 +71,10 @@ function ProfileContent() {
       if (!formData.dob) newErrors.dob = 'Date of birth is required';
       if (!formData.practicingSince)
         newErrors.practicingSince = 'Practicing since date is required';
-      if (!formData.degrees || formData.degrees.length === 0)
-        newErrors.degrees = 'At least one degree is required';
-      if (!formData.specialities || formData.specialities.length === 0)
-        newErrors.specialities = 'At least one speciality is required';
+      if (!formData.degrees || !formData.degrees.trim())
+        newErrors.degrees = 'Degrees are required';
+      if (!formData.specialities || !formData.specialities.trim())
+        newErrors.specialities = 'Specialities are required';
       if (!formData.workExperience)
         newErrors.workExperience = 'Work experience is required';
       if (!formData.citiesAvailable || formData.citiesAvailable.length === 0)
@@ -296,14 +296,16 @@ function ProfileContent() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Degrees</label>
                   {isEditing ? (
-                    <MultiSelect
-                      value={formData.degrees || []}
-                      onChange={(value) => handleInputChange('degrees', value)}
-                      placeholder="Type degree and press Enter (e.g., BPT, MPT)"
+                    <Input
+                      type="text"
+                      value={formData.degrees || ''}
+                      onChange={(e) => handleInputChange('degrees', e.target.value)}
+                      placeholder="Enter your degrees (e.g., BPT, MPT in Orthopedics)"
+                      error={errors.degrees}
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
-                      {formData.degrees?.length ? formData.degrees.join(', ') : 'Not provided'}
+                      {formData.degrees || 'Not provided'}
                     </div>
                   )}
                 </div>
@@ -311,14 +313,16 @@ function ProfileContent() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Specialities</label>
                   {isEditing ? (
-                    <MultiSelect
-                      value={formData.specialities || []}
-                      onChange={(value) => handleInputChange('specialities', value)}
-                      placeholder="Type speciality and press Enter (e.g., Sports Injury)"
+                    <Input
+                      type="text"
+                      value={formData.specialities || ''}
+                      onChange={(e) => handleInputChange('specialities', e.target.value)}
+                      placeholder="Enter your specialities (e.g., Sports Injury, Orthopedic Rehabilitation)"
+                      error={errors.specialities}
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
-                      {formData.specialities?.length ? formData.specialities.join(', ') : 'Not provided'}
+                      {formData.specialities || 'Not provided'}
                     </div>
                   )}
                 </div>
