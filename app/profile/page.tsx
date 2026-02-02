@@ -297,14 +297,9 @@ export default function ProfilePage() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Degrees</label>
                   {isEditing ? (
                     <MultiSelect
-                      options={[
-                        { value: 'BPT', label: 'BPT' },
-                        { value: 'MPT in Orthopedics', label: 'MPT in Orthopedics' },
-                        { value: 'MPT in Neurology', label: 'MPT in Neurology' },
-                        { value: 'MPT in Sports Medicine', label: 'MPT in Sports Medicine' },
-                      ]}
-                      selected={formData.degrees || []}
-                      onChange={(selected) => handleInputChange('degrees', selected)}
+                      value={formData.degrees || []}
+                      onChange={(value) => handleInputChange('degrees', value)}
+                      placeholder="Type degree and press Enter (e.g., BPT, MPT)"
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
@@ -317,15 +312,9 @@ export default function ProfilePage() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Specialities</label>
                   {isEditing ? (
                     <MultiSelect
-                      options={[
-                        { value: 'Sports Injury', label: 'Sports Injury' },
-                        { value: 'Orthopedic Rehabilitation', label: 'Orthopedic Rehabilitation' },
-                        { value: 'Manual Therapy', label: 'Manual Therapy' },
-                        { value: 'Stroke Recovery', label: 'Stroke Recovery' },
-                        { value: 'Back Pain Management', label: 'Back Pain Management' },
-                      ]}
-                      selected={formData.specialities || []}
-                      onChange={(selected) => handleInputChange('specialities', selected)}
+                      value={formData.specialities || []}
+                      onChange={(value) => handleInputChange('specialities', value)}
+                      placeholder="Type speciality and press Enter (e.g., Sports Injury)"
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
@@ -338,15 +327,9 @@ export default function ProfilePage() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">Available Cities</label>
                   {isEditing ? (
                     <MultiSelect
-                      options={[
-                        { value: 'Mumbai', label: 'Mumbai' },
-                        { value: 'Pune', label: 'Pune' },
-                        { value: 'Bangalore', label: 'Bangalore' },
-                        { value: 'Delhi', label: 'Delhi' },
-                        { value: 'Hyderabad', label: 'Hyderabad' },
-                      ]}
-                      selected={formData.citiesAvailable || []}
-                      onChange={(selected) => handleInputChange('citiesAvailable', selected)}
+                      value={formData.citiesAvailable || []}
+                      onChange={(value) => handleInputChange('citiesAvailable', value)}
+                      placeholder="Type city and press Enter (e.g., Mumbai, Delhi)"
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
