@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Input from '@/app/components/Input';
 import Select from '@/app/components/Select';
@@ -12,7 +12,7 @@ import { formatDate } from '@/app/lib/dateFormatter';
 import { findUserById } from '@/app/lib/mockData';
 import { useAuthStore } from '@/app/store/useAuthStore';
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const viewingUserId = searchParams.get('userId');
@@ -448,5 +448,17 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] flex items-center justify-center">
+        <div className="text-xl text-gray-300">Loading...</div>
+      </div>
+    }>
+      <ProfileContent />
+    </Suspense>
   );
 }
