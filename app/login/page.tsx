@@ -208,7 +208,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style dangerouslySetInnerHTML={{__html: `
         @keyframes blob {
           0%, 100% {
             transform: translate(0, 0) scale(1);
@@ -229,7 +229,7 @@ export default function LoginPage() {
         .animation-delay-4000 {
           animation-delay: 4s;
         }
-      `}</style>
+      `}} />
     </div>
   );
 }

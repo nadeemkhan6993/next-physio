@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Card from '@/app/components/Card';
+import Button from '@/app/components/Button';
 import { User, Case, Physiotherapist, Patient, AdminStats } from '@/app/types';
 import { getWorkExperienceText } from '@/app/lib/utils';
 import { formatDate } from '@/app/lib/dateFormatter';
@@ -13,6 +14,8 @@ export default function AdminDashboard() {
   const [cases, setCases] = useState<Case[]>([]);
   const [selectedView, setSelectedView] = useState<'overview' | 'physiotherapists' | 'patients' | 'cases'>('overview');
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
+  const [assigningCase, setAssigningCase] = useState<Case | null>(null);
+  const [selectedPhysioForAssignment, setSelectedPhysioForAssignment] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,6 +60,38 @@ export default function AdminDashboard() {
 
   const getMappedPatients = (physioId: string) => {
     return cases.filter((c) => c.physiotherapistId === physioId);
+  };
+
+  const handleAssignCase = async () => {
+    if (!assigningCase || !selectedPhysioForAssignment) return;
+
+    try {
+      const response = await fetch(`/api/cases/${assigningCase.id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ physiotherapistId: selectedPhysioForAssignment }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Refresh data
+        fetchData();
+        setAssigningCase(null);
+        setSelectedPhysioForAssignment('');
+        alert('Case assigned successfully!');
+      } else {
+        alert(data.error || 'Failed to assign case');
+      }
+    } catch (error) {
+      console.error('Error assigning case:', error);
+      alert('Error assigning case');
+    }
+  };
+
+  const getEligiblePhysios = (caseItem: Case) => {
+    return physiotherapists.filter(p => 
+      p.citiesAvailable && p.citiesAvailable.includes(caseItem.city)
+    );
   };
 
   if (loading) {
@@ -228,26 +263,41 @@ export default function AdminDashboard() {
         {/* Cases */}
         {selectedView === 'cases' && (
           <div className="space-y-6">
-            {cases.map((caseItem) => (
-              <div key={caseItem.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all cursor-pointer" onClick={() => setSelectedCase(caseItem)}>
+            {cases.map((caseItem) => {
+              const eligiblePhysios = getEligiblePhysios(caseItem);
+              return (
+              <div key={caseItem.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="text-2xl font-bold text-white">Case #{caseItem.id}</h3>
                     <p className="text-gray-400 text-sm mt-1">Patient: {getPatientName(caseItem.patientId)}</p>
                   </div>
-                  <span
-                    className={`px-4 py-2 rounded-full text-sm font-medium ${
-                      caseItem.status === 'open'
-                        ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                        : caseItem.status === 'pending_closure'
-                        ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    }`}
-                  >
-                    {caseItem.status === 'pending_closure' 
-                      ? 'Pending Closure' 
-                      : caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`px-4 py-2 rounded-full text-sm font-medium ${
+                        caseItem.status === 'open'
+                          ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                          : caseItem.status === 'pending_closure'
+                          ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      }`}
+                    >
+                      {caseItem.status === 'pending_closure' 
+                        ? 'Pending Closure' 
+                        : caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
+                    </span>
+                    {!caseItem.physiotherapistId && eligiblePhysios.length > 0 && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssigningCase(caseItem);
+                        }}
+                        className="bg-[#06B6D4] hover:bg-[#06B6D4]/80 text-white px-4 py-2 rounded-lg"
+                      >
+                        Assign Physio
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-gray-300 mb-4">{caseItem.issueDetails}</p>
@@ -295,7 +345,64 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
+
+            {/* Assignment Modal */}
+            {assigningCase && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-gradient-to-br from-[#1E293B] to-[#0F172A] rounded-2xl p-8 max-w-md w-full border border-white/20 shadow-2xl">
+                  <h3 className="text-2xl font-bold text-white mb-4">Assign Physiotherapist</h3>
+                  <p className="text-gray-300 mb-6">
+                    Case: {assigningCase.issueDetails.substring(0, 60)}...
+                  </p>
+                  <p className="text-sm text-gray-400 mb-4">
+                    City: <span className="text-[#06B6D4] font-semibold">{assigningCase.city}</span>
+                  </p>
+                  
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Select Physiotherapist
+                  </label>
+                  <select
+                    value={selectedPhysioForAssignment}
+                    onChange={(e) => setSelectedPhysioForAssignment(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white mb-6 focus:outline-none focus:border-[#06B6D4] appearance-none"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundSize: '1.5em 1.5em',
+                    }}
+                  >
+                    <option value="" className="bg-gray-800">Select a physiotherapist</option>
+                    {getEligiblePhysios(assigningCase).map((physio) => (
+                      <option key={physio.id} value={physio.id} className="bg-gray-800">
+                        {physio.name} - {physio.specialities?.join(', ')}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => {
+                        setAssigningCase(null);
+                        setSelectedPhysioForAssignment('');
+                      }}
+                      className="flex-1 bg-white/10 hover:bg-white/20 text-white border border-white/20"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleAssignCase}
+                      disabled={!selectedPhysioForAssignment}
+                      className="flex-1 bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] hover:shadow-lg text-white disabled:opacity-50"
+                    >
+                      Assign
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
