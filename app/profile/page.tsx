@@ -73,16 +73,21 @@ function ProfileContent() {
       if (!formData.dob) newErrors.dob = 'Date of birth is required';
       if (!formData.practicingSince)
         newErrors.practicingSince = 'Practicing since date is required';
-      if (!formData.degrees || !formData.degrees.trim())
-        newErrors.degrees = 'Degrees are required';
-      if (!formData.specialities || !formData.specialities.trim())
-        newErrors.specialities = 'Specialities are required';
-      if (!formData.workExperience)
-        newErrors.workExperience = 'Work experience is required';
+      
+      // Handle degrees - can be string or array
+      const degrees = Array.isArray(formData.degrees) 
+        ? formData.degrees.join('').trim() 
+        : (formData.degrees || '').trim();
+      if (!degrees) newErrors.degrees = 'Degrees are required';
+      
+      // Handle specialities - can be string or array
+      const specialities = Array.isArray(formData.specialities) 
+        ? formData.specialities.join('').trim() 
+        : (formData.specialities || '').trim();
+      if (!specialities) newErrors.specialities = 'Specialities are required';
+      
       if (!formData.citiesAvailable || formData.citiesAvailable.length === 0)
         newErrors.citiesAvailable = 'At least one city is required';
-      if (!formData.clinicAddresses || formData.clinicAddresses.length === 0)
-        newErrors.clinicAddresses = 'At least one clinic address is required';
       if (!formData.mobileNumber)
         newErrors.mobileNumber = 'Mobile number is required';
     }
@@ -300,14 +305,14 @@ function ProfileContent() {
                   {isEditing ? (
                     <Input
                       type="text"
-                      value={formData.degrees || ''}
+                      value={Array.isArray(formData.degrees) ? formData.degrees.join(', ') : (formData.degrees || '')}
                       onChange={(e) => handleInputChange('degrees', e.target.value)}
                       placeholder="Enter your degrees (e.g., BPT, MPT in Orthopedics)"
                       error={errors.degrees}
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
-                      {formData.degrees || 'Not provided'}
+                      {Array.isArray(formData.degrees) ? formData.degrees.join(', ') : (formData.degrees || 'Not provided')}
                     </div>
                   )}
                 </div>
@@ -317,14 +322,14 @@ function ProfileContent() {
                   {isEditing ? (
                     <Input
                       type="text"
-                      value={formData.specialities || ''}
+                      value={Array.isArray(formData.specialities) ? formData.specialities.join(', ') : (formData.specialities || '')}
                       onChange={(e) => handleInputChange('specialities', e.target.value)}
                       placeholder="Enter your specialities (e.g., Sports Injury, Orthopedic Rehabilitation)"
                       error={errors.specialities}
                     />
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
-                      {formData.specialities || 'Not provided'}
+                      {Array.isArray(formData.specialities) ? formData.specialities.join(', ') : (formData.specialities || 'Not provided')}
                     </div>
                   )}
                 </div>
