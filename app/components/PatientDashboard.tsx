@@ -9,6 +9,7 @@ import Select from '@/app/components/Select';
 import TextArea from '@/app/components/TextArea';
 import { Case, Patient, Physiotherapist, CaseFormData } from '@/app/types';
 import { formatTimestamp } from '@/app/lib/dateFormatter';
+import { useCityStore } from '@/app/store/useCityStore';
 
 interface PatientDashboardProps {
   user: Patient;
@@ -16,6 +17,7 @@ interface PatientDashboardProps {
 
 export default function PatientDashboard({ user }: PatientDashboardProps) {
   const router = useRouter();
+  const cities = useCityStore((state) => state.cities);
   
   const [allCases, setAllCases] = useState<Case[]>([]);
   const [activeCase, setActiveCase] = useState<Case | null>(null);
@@ -409,13 +411,22 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
               <div>
                 <label className="block text-sm font-bold text-gray-200 mb-2">Your City</label>
-                <input
-                  type="text"
+                <select
                   value={formData.city}
                   onChange={(e) => handleCityChange(e.target.value)}
-                  placeholder="Enter your city"
-                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#3B82F6] transition-colors"
-                />
+                  className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#3B82F6] transition-colors appearance-none"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: '1.5em 1.5em',
+                  }}
+                >
+                  <option value="" className="bg-gray-800 text-white">Select city</option>
+                  {cities.map((city) => (
+                    <option key={city.value} value={city.value} className="bg-gray-800 text-white">{city.label}</option>
+                  ))}
+                </select>
                 {errors.city && <p className="text-red-400 text-sm mt-1">{errors.city}</p>}
               </div>
 

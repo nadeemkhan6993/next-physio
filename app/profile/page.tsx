@@ -11,6 +11,7 @@ import { getWorkExperienceText } from '@/app/lib/utils';
 import { formatDate } from '@/app/lib/dateFormatter';
 import { findUserById } from '@/app/lib/mockData';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { useCityStore } from '@/app/store/useCityStore';
 
 function ProfileContent() {
   const router = useRouter();
@@ -18,6 +19,7 @@ function ProfileContent() {
   const viewingUserId = searchParams.get('userId');
   
   const { user, updateUser } = useAuthStore();
+  const cities = useCityStore((state) => state.cities);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<any>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -330,11 +332,14 @@ function ProfileContent() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Available Cities</label>
                   {isEditing ? (
-                    <MultiSelect
-                      value={formData.citiesAvailable || []}
-                      onChange={(value) => handleInputChange('citiesAvailable', value)}
-                      placeholder="Type city and press Enter (e.g., Mumbai, Delhi)"
-                    />
+                    <>
+                      <MultiSelect
+                        value={formData.citiesAvailable || []}
+                        onChange={(value) => handleInputChange('citiesAvailable', value)}
+                        options={cities}
+                      />
+                      {errors.citiesAvailable && <p className="text-red-400 text-sm mt-1">{errors.citiesAvailable}</p>}
+                    </>
                   ) : (
                     <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
                       {formData.citiesAvailable?.length ? formData.citiesAvailable.join(', ') : 'Not provided'}
@@ -388,12 +393,17 @@ function ProfileContent() {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">City</label>
                     {isEditing ? (
-                      <Input
-                        type="text"
-                        value={formData.city || ''}
-                        onChange={(e) => handleInputChange('city', e.target.value)}
-                        error={errors.city}
-                      />
+                      <>
+                        <Select
+                          value={formData.city || ''}
+                          onChange={(e) => handleInputChange('city', e.target.value)}
+                          options={[
+                            { value: '', label: 'Select a city' },
+                            ...cities
+                          ]}
+                        />
+                        {errors.city && <p className="text-red-400 text-sm mt-1">{errors.city}</p>}
+                      </>
                     ) : (
                       <div className="bg-white/5 border border-white/10 px-4 py-3 rounded-lg text-gray-200">
                         {formData.city || 'Not provided'}

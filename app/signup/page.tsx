@@ -3,21 +3,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import axios from 'axios';
 import { useAuthStore } from '@/app/store/useAuthStore';
+import { useCityStore } from '@/app/store/useCityStore';
 import { SignupFormData, UserRole } from '@/app/types';
 import DateInput from '@/app/components/DateInput';
 
 const ADMIN_SECRET_CODE = 'ZBK897';
 
-interface City {
-  name: string;
-  state: string;
-}
-
 export default function SignupPage() {
   const router = useRouter();
   const setUser = useAuthStore((state) => state.setUser);
+  const cities = useCityStore((state) => state.cities);
   
   const [role, setRole] = useState<UserRole | ''>('');
   const [formData, setFormData] = useState<Partial<SignupFormData>>({
@@ -28,11 +24,8 @@ export default function SignupPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [indianCities, setIndianCities] = useState<City[]>([]);
-  const [loadingCities, setLoadingCities] = useState(false);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
-  const [citySearchQuery, setCitySearchQuery] = useState('');
   const cityDropdownRef = useRef<HTMLDivElement>(null);
 
   const images = [
@@ -54,7 +47,6 @@ export default function SignupPage() {
     const handleClickOutside = (event: MouseEvent) => {
       if (cityDropdownRef.current && !cityDropdownRef.current.contains(event.target as Node)) {
         setShowCityDropdown(false);
-        setCitySearchQuery('');
       }
     };
 
@@ -65,46 +57,6 @@ export default function SignupPage() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showCityDropdown]);
-
-  // Fetch Indian cities when physiotherapist role is selected
-  useEffect(() => {
-    if (role === 'physiotherapist' && indianCities.length === 0) {
-      fetchIndianCities();
-    }
-  }, [role]);
-
-  const fetchIndianCities = async () => {
-    setLoadingCities(true);
-    try {
-      // Using countriesnow API for Indian cities
-      const response = await axios.post('https://countriesnow.space/api/v0.1/countries/cities', {
-        country: 'india'
-      });
-      
-      if (response.data && response.data.data) {
-        const cities: City[] = response.data.data.map((city: string) => ({
-          name: city,
-          state: ''
-        }));
-        setIndianCities(cities.sort((a: City, b: City) => a.name.localeCompare(b.name)));
-      }
-    } catch (error) {
-      console.error('Error fetching cities:', error);
-      // Fallback to major Indian cities if API fails
-      const fallbackCities = [
-        'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Ahmedabad', 'Chennai', 'Kolkata',
-        'Pune', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane',
-        'Bhopal', 'Visakhapatnam', 'Pimpri-Chinchwad', 'Patna', 'Vadodara', 'Ghaziabad',
-        'Ludhiana', 'Agra', 'Nashik', 'Faridabad', 'Meerut', 'Rajkot', 'Kalyan-Dombivali',
-        'Vasai-Virar', 'Varanasi', 'Srinagar', 'Aurangabad', 'Dhanbad', 'Amritsar', 'Navi Mumbai',
-        'Allahabad', 'Ranchi', 'Howrah', 'Coimbatore', 'Jabalpur', 'Gwalior', 'Vijayawada',
-        'Jodhpur', 'Madurai', 'Raipur', 'Kota'
-      ].map(city => ({ name: city, state: '' }));
-      setIndianCities(fallbackCities);
-    } finally {
-      setLoadingCities(false);
-    }
-  };
 
   const handleRoleChange = (newRole: string) => {
     setRole(newRole as UserRole | '');
@@ -406,13 +358,22 @@ export default function SignupPage() {
                           <label className="block text-sm font-medium text-gray-300 mb-2">
                             City <span className="text-red-400">*</span>
                           </label>
-                          <input
-                            type="text"
+                          <select
                             value={formData.city || ''}
                             onChange={(e) => handleInputChange('city', e.target.value)}
-                            placeholder="Enter city"
-                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#06B6D4] transition-colors"
-                          />
+                            className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#06B6D4] transition-colors appearance-none"
+                            style={{
+                              backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                              backgroundPosition: 'right 0.5rem center',
+                              backgroundRepeat: 'no-repeat',
+                              backgroundSize: '1.5em 1.5em',
+                            }}
+                          >
+                            <option value="" className="bg-gray-800 text-white">Select city</option>
+                            {cities.map((city) => (
+                              <option key={city.value} value={city.value} className="bg-gray-800 text-white">{city.label}</option>
+                            ))}
+                          </select>
                           {errors.city && <p className="text-red-400 text-sm mt-1">{errors.city}</p>}
                         </div>
                       </div>
@@ -542,54 +503,29 @@ export default function SignupPage() {
                           </div>
                           {showCityDropdown && (
                             <div className="absolute z-50 w-full mt-2 bg-gray-800 border border-white/20 rounded-lg shadow-2xl overflow-hidden">
-                              {loadingCities ? (
-                                <div className="p-4 text-center text-gray-400">Loading cities...</div>
-                              ) : (
-                                <>
-                                  <div className="p-2 border-b border-white/10 sticky top-0 bg-gray-800">
-                                    <input
-                                      type="text"
-                                      value={citySearchQuery}
-                                      onChange={(e) => setCitySearchQuery(e.target.value)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      placeholder="Search cities..."
-                                      className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#06B6D4] transition-colors text-sm"
-                                    />
+                              <div className="max-h-64 overflow-y-auto p-2">
+                                {cities.map((city) => (
+                                  <div
+                                    key={city.value}
+                                    onClick={() => toggleCitySelection(city.value)}
+                                    className={`px-4 py-2 cursor-pointer rounded transition-colors ${
+                                      selectedCities.includes(city.value)
+                                        ? 'bg-[#06B6D4]/30 text-white'
+                                        : 'text-gray-300 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCities.includes(city.value)}
+                                        onChange={() => {}}
+                                        className="w-4 h-4"
+                                      />
+                                      <span>{city.label}</span>
+                                    </div>
                                   </div>
-                                  <div className="max-h-64 overflow-y-auto p-2">
-                                    {indianCities
-                                      .filter((city) =>
-                                        city.name.toLowerCase().includes(citySearchQuery.toLowerCase())
-                                      )
-                                      .map((city) => (
-                                        <div
-                                          key={city.name}
-                                          onClick={() => toggleCitySelection(city.name)}
-                                          className={`px-4 py-2 cursor-pointer rounded transition-colors ${
-                                            selectedCities.includes(city.name)
-                                              ? 'bg-[#06B6D4]/30 text-white'
-                                              : 'text-gray-300 hover:bg-white/10'
-                                          }`}
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <input
-                                              type="checkbox"
-                                              checked={selectedCities.includes(city.name)}
-                                              onChange={() => {}}
-                                              className="w-4 h-4"
-                                            />
-                                            <span>{city.name}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    {indianCities.filter((city) =>
-                                      city.name.toLowerCase().includes(citySearchQuery.toLowerCase())
-                                    ).length === 0 && (
-                                      <div className="p-4 text-center text-gray-400">No cities found</div>
-                                    )}
-                                  </div>
-                                </>
-                              )}
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -688,7 +624,7 @@ export default function SignupPage() {
         </div>
       </div>
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
@@ -703,7 +639,7 @@ export default function SignupPage() {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: rgba(6, 182, 212, 0.7);
         }
-      `}</style>
+      `}} />
     </div>
   );
 }

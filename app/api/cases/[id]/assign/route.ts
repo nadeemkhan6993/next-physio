@@ -46,7 +46,19 @@ export async function POST(
       }, { status: 400 });
     }
 
+    // Verify city matching - physiotherapist must serve the case city
+    const caseCity = caseData.city;
+    const physioCities = physio.citiesAvailable || [];
+    
+    if (!physioCities.includes(caseCity)) {
+      return NextResponse.json<ApiResponse>({
+        success: false,
+        error: `Physiotherapist does not serve ${caseCity}. Available cities: ${physioCities.join(', ')}`,
+      }, { status: 400 });
+    }
+
     caseData.physiotherapistId = physiotherapistId as any;
+    caseData.status = 'in_progress';
     await caseData.save();
     await caseData.populate('patientId physiotherapistId', '-password');
 
