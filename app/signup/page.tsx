@@ -263,7 +263,7 @@ export default function SignupPage() {
                       key={r}
                       type="button"
                       onClick={() => handleRoleChange(r)}
-                      className={`py-3 px-4 rounded-lg font-medium transition-all ${
+                      className={`py-3 px-4 rounded-lg font-medium transition-all cursor-pointer ${
                         role === r
                           ? 'bg-[#06B6D4] text-white shadow-lg shadow-[#06B6D4]/30'
                           : 'bg-white/10 text-gray-300 hover:bg-white/20'
@@ -490,7 +490,7 @@ export default function SignupPage() {
                                         e.stopPropagation();
                                         toggleCitySelection(city);
                                       }}
-                                      className="text-white/70 hover:text-white"
+                                      className="text-white/70 hover:text-white cursor-pointer"
                                     >
                                       ×
                                     </button>
@@ -549,7 +549,7 @@ export default function SignupPage() {
                               <button
                                 type="button"
                                 onClick={() => removeArrayField('clinicAddresses', index)}
-                                className="px-4 py-3 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors"
+                                className="px-4 py-3 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors cursor-pointer"
                               >
                                 ✕
                               </button>
@@ -559,7 +559,7 @@ export default function SignupPage() {
                         <button
                           type="button"
                           onClick={() => addArrayField('clinicAddresses')}
-                          className="text-sm text-[#06B6D4] hover:text-[#22D3EE] transition-colors"
+                          className="text-sm text-[#06B6D4] hover:text-[#22D3EE] transition-colors cursor-pointer"
                         >
                           + Add Another Address
                         </button>
@@ -612,7 +612,7 @@ export default function SignupPage() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-3 px-4 bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-[#06B6D4]/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3 px-4 bg-gradient-to-r from-[#06B6D4] to-[#3B82F6] text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-[#06B6D4]/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       {loading ? 'Creating Account...' : 'Sign Up'}
                     </button>

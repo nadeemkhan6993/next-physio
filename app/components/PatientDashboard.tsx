@@ -35,6 +35,10 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [warningMessage, setWarningMessage] = useState<string>('');
+  const [showPhysioSelection, setShowPhysioSelection] = useState(false);
+  const [assigningPhysio, setAssigningPhysio] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -51,12 +55,15 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
       if (data.success && data.data.length > 0) {
         // Separate active and closed cases
-        const active = data.data.find((c: Case) => c.status === 'open' || c.status === 'pending_closure');
+        const active = data.data.find((c: Case) => 
+          c.status === 'open' || c.status === 'in_progress' || c.status === 'pending_closure'
+        );
         const closed = data.data.filter((c: Case) => c.status === 'closed').sort((a: Case, b: Case) => 
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
         
         console.log('Active case found:', active);
+        console.log('Active case physiotherapistId:', active?.physiotherapistId);
         console.log('Closed cases:', closed);
         
         setActiveCase(active || null);
@@ -65,17 +72,47 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
         // Fetch assigned physiotherapist details if case has one
         if (active?.physiotherapistId) {
-          const physioResponse = await fetch(`/api/users/physiotherapists`);
-          const physioData = await physioResponse.json();
-          if (physioData.success) {
-            const assignedPhysiotherapist = physioData.data.find(
-              (p: Physiotherapist) => p.id === active.physiotherapistId
-            );
-            setAssignedPhysio(assignedPhysiotherapist || null);
+          console.log('Fetching physiotherapist details for ID:', active.physiotherapistId);
+          
+          // Check if physiotherapistId is already populated (object) or just an ID (string)
+          if (typeof active.physiotherapistId === 'object' && active.physiotherapistId !== null) {
+            // Already populated, use it directly
+            console.log('Physiotherapist already populated:', active.physiotherapistId);
+            setAssignedPhysio(active.physiotherapistId as Physiotherapist);
+          } else {
+            // It's just an ID, fetch the physiotherapist details
+            const physioResponse = await fetch(`/api/users/physiotherapists`);
+            const physioData = await physioResponse.json();
+            if (physioData.success) {
+              const assignedPhysiotherapist = physioData.data.find(
+                (p: Physiotherapist) => (p.id || p._id) === active.physiotherapistId || (p.id || p._id)?.toString() === active.physiotherapistId?.toString()
+              );
+              console.log('Found assigned physiotherapist:', assignedPhysiotherapist);
+              setAssignedPhysio(assignedPhysiotherapist || null);
+            }
+          }
+          
+          // Clear warning message when physiotherapist is assigned
+          setWarningMessage('');
+          setShowPhysioSelection(false);
+          setPhysiotherapists([]);
+        } else {
+          setAssignedPhysio(null);
+          // Also clear warning if no active case or no physiotherapist needed
+          if (!active) {
+            setWarningMessage('');
+            setShowPhysioSelection(false);
+            setPhysiotherapists([]);
           }
         }
       } else {
         console.log('No cases found or API error');
+        // Clear all states when no cases
+        setActiveCase(null);
+        setAssignedPhysio(null);
+        setWarningMessage('');
+        setShowPhysioSelection(false);
+        setPhysiotherapists([]);
       }
     } catch (error) {
       console.error('Error fetching case:', error);
@@ -93,11 +130,13 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
       }
     } catch (error) {
       console.error('Error fetching physiotherapists:', error);
+      setPhysiotherapists([]);
     }
   };
 
   const handleCityChange = (city: string) => {
-    setFormData((prev) => ({ ...prev, city }));
+    setFormData((prev) => ({ ...prev, city, preferredPhysiotherapistId: undefined }));
+    setPhysiotherapists([]);
     if (city) {
       fetchPhysiotherapists(city);
     }
@@ -132,10 +171,72 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
       const data = await response.json();
       if (data.success) {
-        setActiveCase(data.data);
+        // Immediately update UI states
+        setShowCreateForm(false);
+        setFormData({
+          issueDetails: '',
+          city: '',
+          canTravel: false,
+          preferredGender: 'no-preference',
+        });
+        setPhysiotherapists([]);
+        
+        // Check for warning (no matching gender physiotherapist)
+        if (data.warning) {
+          setWarningMessage(data.warning);
+          // Fetch available physiotherapists in case city for manual selection
+          if (data.data && data.data.city) {
+            fetchPhysiotherapists(data.data.city);
+            setShowPhysioSelection(true);
+          }
+        } else {
+          setWarningMessage('');
+          setShowPhysioSelection(false);
+        }
+        
+        // Refresh data to get updated case with populated physiotherapist details
+        await fetchData();
+        
+        // Scroll to top to show active case or warning
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 100);
+      } else {
+        setErrors({ submit: data.error || 'Failed to create case' });
       }
     } catch (error) {
       console.error('Error creating case:', error);
+      setErrors({ submit: 'An error occurred. Please try again.' });
+    }
+  };
+
+  const handleManualAssignment = async (physioId: string) => {
+    if (!activeCase || assigningPhysio) return;
+    
+    setAssigningPhysio(true);
+    try {
+      const caseId = activeCase.id || activeCase._id;
+      const response = await fetch(`/api/cases/${caseId}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ physiotherapistId: physioId }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setWarningMessage('');
+        setShowPhysioSelection(false);
+        setPhysiotherapists([]);
+        fetchData();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        alert(data.error || 'Failed to assign physiotherapist');
+      }
+    } catch (error) {
+      console.error('Error assigning physiotherapist:', error);
+      alert('An error occurred. Please try again.');
+    } finally {
+      setAssigningPhysio(false);
     }
   };
 
@@ -144,7 +245,8 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
     try {
       const userId = user._id || user.id; // Support both MongoDB _id and legacy id
-      const response = await fetch(`/api/cases/${activeCase.id}/comments`, {
+      const caseId = activeCase.id || activeCase._id;
+      const response = await fetch(`/api/cases/${caseId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -168,7 +270,8 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
     if (!activeCase || !reviewComment.trim()) return;
 
     try {
-      const response = await fetch(`/api/cases/${activeCase.id}/close`, {
+      const caseId = activeCase.id || activeCase._id;
+      const response = await fetch(`/api/cases/${caseId}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -210,26 +313,129 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {activeCase ? (
+        {/* Warning Banner - Only show if no physiotherapist is assigned */}
+        {warningMessage && activeCase && !assignedPhysio && (
+          <div className="bg-yellow-500/20 border-2 border-yellow-500/50 rounded-2xl p-6 mb-6 backdrop-blur">
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">⚠️</div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-yellow-300 mb-2">Action Needed</h3>
+                <p className="text-yellow-100 mb-4">{warningMessage}</p>
+                
+                {showPhysioSelection && physiotherapists.length > 0 ? (
+                  <div>
+                    <h4 className="text-lg font-bold text-yellow-200 mb-3">Available Physiotherapists in {activeCase.city}:</h4>
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 mb-4">
+                      {physiotherapists.map((physio) => {
+                        const physioId = physio._id || physio.id;
+                        return (
+                          <div
+                            key={physioId}
+                            className="bg-white/10 border border-white/20 rounded-lg p-4 hover:border-yellow-400 transition-all"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-white font-bold text-lg">{physio.name}</p>
+                                {physio.gender && (
+                                  <p className="text-gray-300 text-sm mt-1 capitalize">
+                                    👤 {physio.gender}
+                                  </p>
+                                )}
+                                {physio.degrees && physio.degrees.length > 0 && (
+                                  <p className="text-gray-300 text-sm mt-1">🎓 {physio.degrees.join(', ')}</p>
+                                )}
+                                {physio.specialities && physio.specialities.length > 0 && (
+                                  <p className="text-gray-300 text-sm mt-1">🏥 {physio.specialities.join(', ')}</p>
+                                )}
+                                {physio.practicingSince && (
+                                  <p className="text-gray-400 text-sm mt-1">
+                                    ⏱️ Practicing since {new Date(physio.practicingSince).getFullYear()}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleManualAssignment(physioId)}
+                                disabled={assigningPhysio}
+                                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ml-4"
+                              >
+                                {assigningPhysio ? 'Assigning...' : 'Select'}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setWarningMessage('');
+                        setShowPhysioSelection(false);
+                        setPhysiotherapists([]);
+                      }}
+                      className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg border border-white/30 transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => {
+                        if (activeCase.city) {
+                          fetchPhysiotherapists(activeCase.city);
+                          setShowPhysioSelection(true);
+                        }
+                      }}
+                      className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold rounded-lg transition-all cursor-pointer"
+                    >
+                      Select Physiotherapist
+                    </button>
+                    <button
+                      onClick={() => setWarningMessage('')}
+                      className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded-lg border border-white/30 transition-all cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeCase && !showCreateForm ? (
           <div className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur">
             <div className="flex justify-between items-start mb-8">
               <div>
                 <h2 className="text-3xl font-bold text-white">Your Active Case</h2>
                 <p className="text-gray-400 mt-1">Stay updated with your treatment progress</p>
               </div>
-              <span
-                className={`px-4 py-2 rounded-full text-sm font-bold ${
-                  activeCase.status === 'open'
-                    ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                    : activeCase.status === 'pending_closure'
-                    ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                }`}
-              >
-                {activeCase.status === 'pending_closure' 
-                  ? 'Pending Closure' 
-                  : activeCase.status.charAt(0).toUpperCase() + activeCase.status.slice(1)}
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-lg hover:shadow-lg transition-all text-sm cursor-pointer"
+                >
+                  + Create New Case
+                </button>
+                <span
+                  className={`px-4 py-2 rounded-full text-sm font-bold ${
+                    activeCase.status === 'open'
+                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                      : activeCase.status === 'in_progress'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : activeCase.status === 'pending_closure'
+                      ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                      : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
+                  }`}
+                >
+                  {activeCase.status === 'pending_closure' 
+                    ? 'Pending Closure' 
+                    : activeCase.status === 'in_progress'
+                    ? 'In Progress'
+                    : activeCase.status === 'open'
+                    ? 'Open'
+                    : activeCase.status.charAt(0).toUpperCase() + activeCase.status.slice(1)}
+                </span>
+              </div>
             </div>
 
             {/* Issue Details */}
@@ -244,12 +450,12 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
             </div>
 
             {/* Assigned Physiotherapist */}
-            {activeCase.physiotherapistId && assignedPhysio ? (
+            {assignedPhysio ? (
               <div className="bg-gradient-to-br from-[#06B6D4]/20 to-[#3B82F6]/20 p-6 rounded-xl mb-8 border border-[#06B6D4]/30">
                 <h3 className="font-bold text-white mb-3 text-lg">👨‍⚕️ Your Physiotherapist</h3>
                 <button
-                  onClick={() => router.push(`/profile?userId=${assignedPhysio.id}`)}
-                  className="text-gray-200 text-xl font-semibold mb-2 hover:text-[#06B6D4] transition-colors cursor-pointer underline"
+                  onClick={() => router.push(`/profile?userId=${assignedPhysio.id || assignedPhysio._id}`)}
+                  className="text-gray-200 text-xl font-semibold mb-2 hover:text-[#06B6D4] transition-colors cursor-pointer underline text-left"
                 >
                   {assignedPhysio.name}
                 </button>
@@ -274,7 +480,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
               <h3 className="font-bold text-white mb-6 text-2xl">💬 Messages & Progress Updates</h3>
               
               {/* Add Comment - Positioned at Top */}
-              {activeCase.status === 'open' && (
+              {(activeCase.status === 'open' || activeCase.status === 'in_progress') && (
                 <div className="space-y-4 mb-8 pb-6 border-b border-white/10">
                   <TextArea
                     value={newComment}
@@ -285,7 +491,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                   />
                   <button
                     onClick={handleAddComment}
-                    className="w-full py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all"
+                    className="w-full py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all cursor-pointer"
                   >
                     Send Message
                   </button>
@@ -297,7 +503,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                 {activeCase.comments && activeCase.comments.length > 0 ? (
                   [...activeCase.comments].reverse().map((comment) => (
                     <div
-                      key={comment.id}
+                      key={comment.id || comment._id}
                       className={`p-5 rounded-xl border ${
                         comment.userRole === 'patient' 
                           ? 'bg-[#3B82F6]/10 border-[#3B82F6]/30' 
@@ -365,7 +571,7 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
 
                   <button
                     onClick={handleCloseCase}
-                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-all"
+                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-all cursor-pointer"
                   >
                     ✓ Confirm and Close Case
                   </button>
@@ -445,9 +651,88 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                 </label>
               </div>
 
+              {formData.city && physiotherapists.length > 0 && (
+                <div>
+                  <label className="block text-sm font-bold text-gray-200 mb-2">
+                    Choose Physiotherapist (Optional)
+                  </label>
+                  <p className="text-gray-400 text-sm mb-3">
+                    {physiotherapists.length} physiotherapist{physiotherapists.length !== 1 ? 's' : ''} available in {formData.city}
+                  </p>
+                  <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                    <div
+                      onClick={() => setFormData((prev) => ({ ...prev, preferredPhysiotherapistId: undefined }))}
+                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                        !formData.preferredPhysiotherapistId
+                          ? 'bg-[#3B82F6]/20 border-[#3B82F6] ring-2 ring-[#3B82F6]/50'
+                          : 'bg-white/5 border-white/10 hover:border-white/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          !formData.preferredPhysiotherapistId ? 'border-[#3B82F6] bg-[#3B82F6]' : 'border-gray-400'
+                        }`}>
+                          {!formData.preferredPhysiotherapistId && (
+                            <div className="w-2 h-2 bg-white rounded-full"></div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-white font-bold">No Preference (Auto-assign)</p>
+                          <p className="text-gray-400 text-sm">Let the system match you with an available therapist</p>
+                        </div>
+                      </div>
+                    </div>
+                    {physiotherapists.map((physio) => {
+                      const userId = physio._id || physio.id;
+                      const isSelected = formData.preferredPhysiotherapistId === userId;
+                      return (
+                        <div
+                          key={userId}
+                          onClick={() => setFormData((prev) => ({ ...prev, preferredPhysiotherapistId: userId }))}
+                          className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-[#3B82F6]/20 border-[#3B82F6] ring-2 ring-[#3B82F6]/50'
+                              : 'bg-white/5 border-white/10 hover:border-white/30'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${
+                              isSelected ? 'border-[#3B82F6] bg-[#3B82F6]' : 'border-gray-400'
+                            }`}>
+                              {isSelected && (
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-white font-bold text-lg">{physio.name}</p>
+                              {physio.degrees && physio.degrees.length > 0 && (
+                                <p className="text-gray-300 text-sm mt-1">🎓 {physio.degrees.join(', ')}</p>
+                              )}
+                              {physio.specialities && physio.specialities.length > 0 && (
+                                <p className="text-gray-300 text-sm mt-1">🏥 {physio.specialities.join(', ')}</p>
+                              )}
+                              {physio.practicingSince && (
+                                <p className="text-gray-400 text-sm mt-1">
+                                  ⏱️ Practicing since {new Date(physio.practicingSince).getFullYear()}
+                                </p>
+                              )}
+                              {physio.gender && (
+                                <p className="text-gray-400 text-sm mt-1 capitalize">
+                                  👤 {physio.gender}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {!formData.preferredPhysiotherapistId && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-200 mb-2">Therapist Preference (Optional)</label>
+                  <label className="block text-sm font-bold text-gray-200 mb-2">Gender Preference (Optional)</label>
                   <select
                     value={formData.preferredGender || 'no-preference'}
                     onChange={(e) =>
@@ -465,12 +750,32 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="w-full py-4 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all"
-              >
-                Submit Case
-              </button>
+              <div className="flex gap-3">
+                {activeCase && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setFormData({
+                        issueDetails: '',
+                        city: '',
+                        canTravel: false,
+                        preferredGender: 'no-preference',
+                      });
+                      setPhysiotherapists([]);
+                    }}
+                    className="w-1/3 py-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/20 transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className={`${activeCase ? 'w-2/3' : 'w-full'} py-4 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all cursor-pointer`}
+                >
+                  Submit Case
+                </button>
+              </div>
             </form>
           </div>
         )}
@@ -480,11 +785,11 @@ export default function PatientDashboard({ user }: PatientDashboardProps) {
           <div className="mt-8">
             <h2 className="text-3xl font-bold text-white mb-6">📚 Treatment History</h2>
             <div className="space-y-6">
-              {closedCases.map((caseItem) => (
-                <div key={caseItem.id} className="bg-gradient-to-br from-white/5 to-white/3 rounded-2xl p-6 border border-white/10 backdrop-blur">
+              {closedCases.map((caseItem, index) => (
+                <div key={caseItem.id || caseItem._id} className="bg-gradient-to-br from-white/5 to-white/3 rounded-2xl p-6 border border-white/10 backdrop-blur">
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="text-xl font-bold text-white">Case #{caseItem.id.slice(-6)}</h3>
+                      <h3 className="text-xl font-bold text-white">Case #{index + 1}</h3>
                       <p className="text-gray-400 text-sm mt-1">{new Date(caseItem.createdAt).toLocaleDateString()}</p>
                     </div>
                     <span className="px-4 py-2 rounded-full text-sm font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">

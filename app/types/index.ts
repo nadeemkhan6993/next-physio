@@ -40,10 +40,11 @@ export interface Patient extends BaseUser {
 export type User = Admin | Physiotherapist | Patient;
 
 // Case/Therapy Types
-export type CaseStatus = 'open' | 'pending_closure' | 'closed';
+export type CaseStatus = 'open' | 'in_progress' | 'pending_closure' | 'closed';
 
 export interface Comment {
   id: string;
+  _id?: string; // MongoDB _id for compatibility
   userId: string;
   userName: string;
   userRole: UserRole;
@@ -53,6 +54,7 @@ export interface Comment {
 
 export interface Case {
   id: string;
+  _id?: string; // MongoDB _id for compatibility
   patientId: string;
   physiotherapistId?: string;
   issueDetails: string;
@@ -112,6 +114,7 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  warning?: string;
 }
 
 export interface AuthResponse {
