@@ -9,7 +9,6 @@ import Button from '@/app/components/Button';
 import { User, Admin, Physiotherapist, Patient } from '@/app/types';
 import { getWorkExperienceText } from '@/app/lib/utils';
 import { formatDate } from '@/app/lib/dateFormatter';
-import { findUserById } from '@/app/lib/mockData';
 import { useAuthStore } from '@/app/store/useAuthStore';
 import { useCityStore } from '@/app/store/useCityStore';
 
@@ -34,25 +33,39 @@ function ProfileContent() {
       return;
     }
 
-    // If viewing another user, load their profile
-    if (viewingUserId) {
-      const otherUser = findUserById(viewingUserId);
-      if (otherUser) {
-        setViewingUser(otherUser);
-        setFormData(otherUser);
-        setIsViewingOther(true);
+    const fetchUserProfile = async () => {
+      // If viewing another user, fetch their profile from API
+      if (viewingUserId && viewingUserId !== (user._id || user.id)) {
+        try {
+          const response = await fetch(`/api/users/${viewingUserId}`);
+          const data = await response.json();
+          
+          if (data.success && data.data) {
+            setViewingUser(data.data);
+            setFormData(data.data);
+            setIsViewingOther(true);
+          } else {
+            // User not found, fallback to own profile
+            setFormData(user);
+            setViewingUser(user as any);
+            setIsViewingOther(false);
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          // Fallback to own profile on error
+          setFormData(user);
+          setViewingUser(user as any);
+          setIsViewingOther(false);
+        }
       } else {
-        // User not found, fallback to own profile
+        // Viewing own profile
         setFormData(user);
         setViewingUser(user as any);
         setIsViewingOther(false);
       }
-    } else {
-      // Viewing own profile
-      setFormData(user);
-      setViewingUser(user as any);
-      setIsViewingOther(false);
-    }
+    };
+
+    fetchUserProfile();
   }, [router, viewingUserId, user]);
 
   const handleInputChange = (field: string, value: any) => {
@@ -107,6 +120,11 @@ function ProfileContent() {
   };
 
   const handleSave = async () => {
+    // Prevent editing if viewing another user
+    if (isViewingOther) {
+      return;
+    }
+
     if (!validateForm()) return;
 
     setLoading(true);
@@ -178,7 +196,7 @@ function ProfileContent() {
             {!isEditing && !isViewingOther && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all"
+                className="px-6 py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all cursor-pointer"
               >
                 ✏️ Edit Profile
               </button>
@@ -218,16 +236,16 @@ function ProfileContent() {
             </div>
 
             {/* Admin Profile */}
-            {user.role === 'admin' && (
+            {viewingUser?.role === 'admin' && (
               <div className="bg-gradient-to-br from-[#3B82F6]/20 to-[#06B6D4]/20 p-6 rounded-xl border border-[#3B82F6]/30">
                 <p className="text-gray-200">
-                  <span className="text-[#06B6D4] font-bold">👔 Administrator</span> - You have full access to the platform.
+                  <span className="text-[#06B6D4] font-bold">👔 Administrator</span> - {isViewingOther ? 'This user has' : 'You have'} full access to the platform.
                 </p>
               </div>
             )}
 
             {/* Physiotherapist Fields */}
-            {user.role === 'physiotherapist' && (
+            {viewingUser?.role === 'physiotherapist' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -355,7 +373,7 @@ function ProfileContent() {
             )}
 
             {/* Patient Fields */}
-            {user.role === 'patient' && (
+            {viewingUser?.role === 'patient' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -457,7 +475,7 @@ function ProfileContent() {
                     setErrors({});
                     setSuccessMessage('');
                   }}
-                  className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/20 transition-all"
+                  className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg border border-white/20 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>

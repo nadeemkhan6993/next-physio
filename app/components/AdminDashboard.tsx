@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import Card from '@/app/components/Card';
 import Button from '@/app/components/Button';
+import SearchBar from '@/app/components/SearchBar';
 import { User, Case, Physiotherapist, Patient, AdminStats } from '@/app/types';
 import { getWorkExperienceText } from '@/app/lib/utils';
 import { formatDate } from '@/app/lib/dateFormatter';
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [physiotherapists, setPhysiotherapists] = useState<Physiotherapist[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -17,6 +20,11 @@ export default function AdminDashboard() {
   const [assigningCase, setAssigningCase] = useState<Case | null>(null);
   const [selectedPhysioForAssignment, setSelectedPhysioForAssignment] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  
+  // Search states
+  const [physioSearch, setPhysioSearch] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [caseSearch, setCaseSearch] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -47,26 +55,43 @@ export default function AdminDashboard() {
     }
   };
 
-  const getPatientName = (patientId: string) => {
-    const patient = patients.find((p) => p.id === patientId);
+  const getPatientName = (patientId: string | any) => {
+    // If patientId is already an object with name, use it directly
+    if (typeof patientId === 'object' && patientId !== null && 'name' in patientId) {
+      return patientId.name;
+    }
+    // Otherwise find the patient by ID
+    const patient = patients.find((p) => (p.id || p._id) === patientId || (p.id || p._id)?.toString() === patientId?.toString());
     return patient ? patient.name : 'Unknown';
   };
 
-  const getPhysioName = (physioId?: string) => {
+  const getPhysioName = (physioId?: string | any) => {
     if (!physioId) return 'Unassigned';
-    const physio = physiotherapists.find((p) => p.id === physioId);
+    // If physioId is already an object with name, use it directly
+    if (typeof physioId === 'object' && physioId !== null && 'name' in physioId) {
+      return physioId.name;
+    }
+    // Otherwise find the physiotherapist by ID
+    const physio = physiotherapists.find((p) => (p.id || p._id) === physioId || (p.id || p._id)?.toString() === physioId?.toString());
     return physio ? physio.name : 'Unknown';
   };
 
   const getMappedPatients = (physioId: string) => {
-    return cases.filter((c) => c.physiotherapistId === physioId);
+    return cases.filter((c) => {
+      // Handle both object and string physiotherapistId
+      if (typeof c.physiotherapistId === 'object' && c.physiotherapistId !== null) {
+        return (c.physiotherapistId as any)._id === physioId || (c.physiotherapistId as any).id === physioId;
+      }
+      return c.physiotherapistId === physioId || c.physiotherapistId?.toString() === physioId?.toString();
+    });
   };
 
   const handleAssignCase = async () => {
     if (!assigningCase || !selectedPhysioForAssignment) return;
 
     try {
-      const response = await fetch(`/api/cases/${assigningCase.id}/assign`, {
+      const caseId = assigningCase.id || assigningCase._id;
+      const response = await fetch(`/api/cases/${caseId}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ physiotherapistId: selectedPhysioForAssignment }),
@@ -94,6 +119,39 @@ export default function AdminDashboard() {
     );
   };
 
+  // Get simple case number by index
+  const getCaseNumber = (caseItem: Case) => {
+    const index = cases.findIndex(c => (c.id || c._id) === (caseItem.id || caseItem._id));
+    return index !== -1 ? index + 1 : 0;
+  };
+
+  // Filtered lists using useMemo for optimization
+  const filteredPhysiotherapists = useMemo(() => {
+    if (!physioSearch.trim()) return physiotherapists;
+    const searchLower = physioSearch.toLowerCase();
+    return physiotherapists.filter(p => 
+      p.name.toLowerCase().includes(searchLower)
+    );
+  }, [physiotherapists, physioSearch]);
+
+  const filteredPatients = useMemo(() => {
+    if (!patientSearch.trim()) return patients;
+    const searchLower = patientSearch.toLowerCase();
+    return patients.filter(p => 
+      p.name.toLowerCase().includes(searchLower)
+    );
+  }, [patients, patientSearch]);
+
+  const filteredCases = useMemo(() => {
+    if (!caseSearch.trim()) return cases;
+    const searchLower = caseSearch.toLowerCase();
+    return cases.filter((c, index) => {
+      const caseNumber = (index + 1).toString();
+      const patientName = getPatientName(c.patientId).toLowerCase();
+      return caseNumber.includes(searchLower) || patientName.includes(searchLower);
+    });
+  }, [cases, caseSearch, patients]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0F172A] flex items-center justify-center">
@@ -119,7 +177,7 @@ export default function AdminDashboard() {
             <button
               key={view}
               onClick={() => setSelectedView(view as any)}
-              className={`px-6 py-3 rounded-xl font-medium capitalize whitespace-nowrap transition-all ${
+              className={`px-6 py-3 rounded-xl font-medium capitalize whitespace-nowrap transition-all cursor-pointer ${
                 selectedView === view
                   ? 'bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white shadow-lg scale-105'
                   : 'bg-white/10 text-gray-300 hover:bg-white/20 border border-white/10'
@@ -159,14 +217,31 @@ export default function AdminDashboard() {
         {/* Physiotherapists */}
         {selectedView === 'physiotherapists' && (
           <div className="space-y-6">
-            {physiotherapists.map((physio) => {
-              const mappedCases = getMappedPatients(physio.id);
+            <SearchBar
+              value={physioSearch}
+              onChange={setPhysioSearch}
+              placeholder="Search physiotherapists by name..."
+              className="mb-6"
+            />
+            {filteredPhysiotherapists.length === 0 ? (
+              <div className="bg-white/5 rounded-2xl p-12 border border-white/10 text-center">
+                <p className="text-gray-400 text-lg">No physiotherapists found matching "{physioSearch}"</p>
+              </div>
+            ) : (
+              filteredPhysiotherapists.map((physio) => {
+              const physioId = (physio.id || physio._id) as string;
+              const mappedCases = getMappedPatients(physioId);
               return (
-                <div key={physio.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
+                <div key={physioId} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
                   <div className="flex justify-between items-start mb-6">
                     <div className="flex-1">
-                      <h3 className="text-2xl font-bold text-white">{physio.name}</h3>
-                      <p className="text-blue-300 text-sm mt-1">ID: {physio.id}</p>
+                      <button
+                        onClick={() => router.push(`/profile?userId=${physioId}`)}
+                        className="text-2xl font-bold text-white hover:text-[#3B82F6] transition-colors cursor-pointer underline text-left"
+                      >
+                        {physio.name}
+                      </button>
+                      <p className="text-blue-300 text-sm mt-1">{physio.degrees?.join(', ') || 'No degrees listed'}</p>
                     </div>
                     <div className="text-right bg-gradient-to-br from-[#3B82F6] to-[#06B6D4] rounded-xl p-4">
                       <div className="text-3xl font-bold text-white">{mappedCases.length}</div>
@@ -198,7 +273,7 @@ export default function AdminDashboard() {
                       <h4 className="font-semibold text-white mb-3">Assigned Patients:</h4>
                       <div className="flex flex-wrap gap-2">
                         {mappedCases.map((c) => (
-                          <span key={c.id} className="bg-[#3B82F6]/20 text-[#3B82F6] text-xs px-3 py-1 rounded-full border border-[#3B82F6]/30">
+                          <span key={c.id || c._id} className="bg-[#3B82F6]/20 text-[#3B82F6] text-xs px-3 py-1 rounded-full border border-[#3B82F6]/30">
                             {getPatientName(c.patientId)} ({c.status})
                           </span>
                         ))}
@@ -207,18 +282,43 @@ export default function AdminDashboard() {
                   )}
                 </div>
               );
-            })}
+              })
+            )}
           </div>
         )}
 
         {/* Patients */}
         {selectedView === 'patients' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {patients.map((patient) => {
-              const patientCases = cases.filter((c) => c.patientId === patient.id);
+          <div className="space-y-6">
+            <SearchBar
+              value={patientSearch}
+              onChange={setPatientSearch}
+              placeholder="Search patients by name..."
+              className="mb-6"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPatients.length === 0 ? (
+              <div className="col-span-full bg-white/5 rounded-2xl p-12 border border-white/10 text-center">
+                <p className="text-gray-400 text-lg">No patients found matching "{patientSearch}"</p>
+              </div>
+            ) : (
+              filteredPatients.map((patient) => {
+              const patientId = patient.id || patient._id;
+              const patientCases = cases.filter((c) => {
+                // Handle both object and string patientId
+                if (typeof c.patientId === 'object' && c.patientId !== null) {
+                  return (c.patientId as any)._id === patientId || (c.patientId as any).id === patientId;
+                }
+                return c.patientId === patientId || c.patientId?.toString() === patientId?.toString();
+              });
               return (
-                <div key={patient.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur hover:border-[#06B6D4]/50 transition-all">
-                  <h3 className="text-xl font-bold text-white">{patient.name}</h3>
+                <div key={patientId} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur hover:border-[#06B6D4]/50 transition-all">
+                  <button
+                    onClick={() => router.push(`/profile?userId=${patientId}`)}
+                    className="text-xl font-bold text-white hover:text-[#06B6D4] transition-colors cursor-pointer underline text-left"
+                  >
+                    {patient.name}
+                  </button>
                   <p className="text-gray-400 text-sm mt-1">{patient.email}</p>
                   
                   <div className="space-y-3 mt-4 mb-4">
@@ -243,7 +343,7 @@ export default function AdminDashboard() {
                   {patientCases.length > 0 && (
                     <div className="pt-4 border-t border-white/10 space-y-2">
                       {patientCases.map((c) => (
-                        <div key={c.id} className="bg-[#3B82F6]/10 p-2 rounded border border-[#3B82F6]/20">
+                        <div key={c.id || c._id} className="bg-[#3B82F6]/10 p-2 rounded border border-[#3B82F6]/20">
                           <p className="text-xs text-gray-300">
                             <span className="text-[#3B82F6] font-medium">Status:</span> {c.status}
                           </p>
@@ -256,20 +356,33 @@ export default function AdminDashboard() {
                   )}
                 </div>
               );
-            })}
+              })
+            )}
+            </div>
           </div>
         )}
 
         {/* Cases */}
         {selectedView === 'cases' && (
           <div className="space-y-6">
-            {cases.map((caseItem) => {
+            <SearchBar
+              value={caseSearch}
+              onChange={setCaseSearch}
+              placeholder="Search cases by number or patient name..."
+              className="mb-6"
+            />
+            {filteredCases.length === 0 ? (
+              <div className="bg-white/5 rounded-2xl p-12 border border-white/10 text-center">
+                <p className="text-gray-400 text-lg">No cases found matching "{caseSearch}"</p>
+              </div>
+            ) : (
+              filteredCases.map((caseItem, index) => {
               const eligiblePhysios = getEligiblePhysios(caseItem);
               return (
-              <div key={caseItem.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
+              <div key={caseItem.id || caseItem._id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-8 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="text-2xl font-bold text-white">Case #{caseItem.id}</h3>
+                    <h3 className="text-2xl font-bold text-white">Case #{getCaseNumber(caseItem)}</h3>
                     <p className="text-gray-400 text-sm mt-1">Patient: {getPatientName(caseItem.patientId)}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -277,13 +390,19 @@ export default function AdminDashboard() {
                       className={`px-4 py-2 rounded-full text-sm font-medium ${
                         caseItem.status === 'open'
                           ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                          : caseItem.status === 'in_progress'
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                           : caseItem.status === 'pending_closure'
                           ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
                       }`}
                     >
                       {caseItem.status === 'pending_closure' 
                         ? 'Pending Closure' 
+                        : caseItem.status === 'in_progress'
+                        ? 'In Progress'
+                        : caseItem.status === 'open'
+                        ? 'Open'
                         : caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
                     </span>
                     {!caseItem.physiotherapistId && eligiblePhysios.length > 0 && (
@@ -317,16 +436,16 @@ export default function AdminDashboard() {
                   </div>
                   <div className="bg-white/5 rounded-lg p-3 border border-white/10">
                     <p className="text-xs text-gray-400">Comments</p>
-                    <p className="text-sm text-white mt-1">{caseItem.comments.length}</p>
+                    <p className="text-sm text-white mt-1">{caseItem.comments?.length || 0}</p>
                   </div>
                 </div>
 
-                {caseItem.comments.length > 0 && (
+                {caseItem.comments && caseItem.comments.length > 0 && (
                   <div className="pt-4 border-t border-white/10">
                     <h4 className="font-semibold text-white mb-3">Latest Comments:</h4>
                     <div className="space-y-2">
                       {[...caseItem.comments].reverse().slice(0, 2).map((comment) => (
-                        <div key={comment.id} className="bg-white/5 p-3 rounded border border-white/10">
+                        <div key={comment.id || comment._id} className="bg-white/5 p-3 rounded border border-white/10">
                           <div className="flex justify-between items-start mb-1">
                             <div>
                               <span className="text-sm font-medium text-[#3B82F6]">{comment.userName}</span>
@@ -346,7 +465,8 @@ export default function AdminDashboard() {
                 )}
               </div>
               );
-            })}
+            })
+            )}
 
             {/* Assignment Modal */}
             {assigningCase && (
@@ -375,11 +495,14 @@ export default function AdminDashboard() {
                     }}
                   >
                     <option value="" className="bg-gray-800">Select a physiotherapist</option>
-                    {getEligiblePhysios(assigningCase).map((physio) => (
-                      <option key={physio.id} value={physio.id} className="bg-gray-800">
-                        {physio.name} - {physio.specialities?.join(', ')}
-                      </option>
-                    ))}
+                    {getEligiblePhysios(assigningCase).map((physio) => {
+                      const physioId = physio.id || physio._id;
+                      return (
+                        <option key={physioId} value={physioId} className="bg-gray-800">
+                          {physio.name} - {physio.specialities?.join(', ')}
+                        </option>
+                      );
+                    })}
                   </select>
 
                   <div className="flex gap-3">

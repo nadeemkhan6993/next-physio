@@ -66,9 +66,18 @@ ENCRYPTION_KEY=<64-char hex from generate-keys.js>
 npm run lint          # ESLint (config: eslint.config.mjs)
 npx tsc --noEmit     # TypeScript strict mode check
 npm test             # Run all unit tests (81 tests)
+npm run test:watch   # Run tests in watch mode
 npm run test:coverage # Test with coverage report
 npm run build        # Production build
 ```
+
+### Testing Strategy
+- **Framework**: Jest + React Testing Library + ts-jest
+- **Config**: `jest.config.ts` with coverage thresholds (60% lines/statements, 70% branches)
+- **Test location**: `app/**/__tests__/*.test.ts(x)` pattern
+- **Coverage focus**: Utils (92%), encryption (90%), constants (100%), stores (100%), UI components (100%)
+- **NOT covered**: Dashboard components (require API mocking), models, MongoDB connection
+- **Run pattern**: Tests use `moduleNameMapper` for `@/` imports, `jsdom` environment for React components
 
 ### Debugging MongoDB
 - Connection issues? See `MONGODB_FIX.md` for DNS/SRV troubleshooting
@@ -136,6 +145,27 @@ export default function MyDashboard() {
 }
 ```
 
+### Suspense Pattern (Example from profile page)
+```tsx
+"use client";
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+function ProfileContent() {
+  const searchParams = useSearchParams(); // Requires Suspense boundary
+  // ... component logic
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div>Loading profile...</div>}>
+      <ProfileContent />
+    </Suspense>
+  );
+}
+```
+**Why**: `useSearchParams()` triggers dynamic rendering; Next.js requires Suspense boundary to avoid build errors.
+
 ## Integration Points & External Dependencies
 
 ### MongoDB Atlas
@@ -148,15 +178,15 @@ export default function MyDashboard() {
 - Uses AES-256-CBC with random IV per encryption
 - Key generated via `scripts/generate-keys.js`
 
-##**Auth Store**: `app/store/useAuthStore.ts`
-  - Persists user object to localStorage
+### State Management Stores
+- **Auth Store** (`app/store/useAuthStore.ts`):
+  - Persists user object to localStorage via Zustand persist middleware
   - Methods: `setUser(user)`, `logout()`, `updateUser(partial)`
-- **City Store**: `app/store/useCityStore.ts`
-  - Fetches cities from `/api/cities` on app load
-  - Persists to localStorage to avoid repeated API calls
-  - Method: `fetchCities()` (auto-called by CityProvider)
-  - **Usage pattern**: `const cities = useCityStore((state) => state.cities);` - returns `{value, label}[]
-- Methods: `setUser(user)`, `logout()`, `updateUser(partial)`
+  - Usage: `const { user, isAuthenticated } = useAuthStore();`
+- **City Store** (`app/store/useCityStore.ts`):
+  - Fetches cities from `/api/cities` on app load, persisted to localStorage
+  - Method: `fetchCities()` (auto-called by CityProvider in root layout)
+  - Usage: `const cities = useCityStore((state) => state.cities);` - returns `{value, label}[]`
 
 ## What Agents Should NOT Do
 

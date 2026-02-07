@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Card from '@/app/components/Card';
 import Button from '@/app/components/Button';
 import TextArea from '@/app/components/TextArea';
@@ -12,6 +13,7 @@ interface PhysiotherapistDashboardProps {
 }
 
 export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashboardProps) {
+  const router = useRouter();
   const [myCases, setMyCases] = useState<Case[]>([]);
   const [unmappedCases, setUnmappedCases] = useState<Case[]>([]);
   const [selectedCase, setSelectedCase] = useState<Case | null>(null);
@@ -48,7 +50,8 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
 
     try {
       const userId = user._id || user.id; // Support both MongoDB _id and legacy id
-      const response = await fetch(`/api/cases/${selectedCase.id}/comments`, {
+      const caseId = selectedCase._id || selectedCase.id; // Support both MongoDB _id and legacy id
+      const response = await fetch(`/api/cases/${caseId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -130,7 +133,7 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
         <div className="flex gap-3 mb-8">
           <button
             onClick={() => setView('my-cases')}
-            className={`px-6 py-3 rounded-xl font-medium transition-all ${
+            className={`px-6 py-3 rounded-xl font-medium transition-all cursor-pointer ${
               view === 'my-cases'
                 ? 'bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white shadow-lg scale-105'
                 : 'bg-white/10 text-gray-300 hover:bg-white/20 border border-white/10'
@@ -140,7 +143,7 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
           </button>
           <button
             onClick={() => setView('available-cases')}
-            className={`px-6 py-3 rounded-xl font-medium transition-all ${
+            className={`px-6 py-3 rounded-xl font-medium transition-all cursor-pointer ${
               view === 'available-cases'
                 ? 'bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white shadow-lg scale-105'
                 : 'bg-white/10 text-gray-300 hover:bg-white/20 border border-white/10'
@@ -159,35 +162,41 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
                   <p className="text-gray-400">No assigned cases yet</p>
                 </div>
               ) : (
-                myCases.map((caseItem) => (
+                myCases.map((caseItem, index) => (
                   <div
-                    key={caseItem.id}
+                    key={caseItem.id || caseItem._id}
                     onClick={() => setSelectedCase(caseItem)}
                     className={`bg-gradient-to-br rounded-xl p-4 border cursor-pointer transition-all ${
-                      selectedCase?.id === caseItem.id
+                      selectedCase?.id === caseItem.id || selectedCase?._id === caseItem._id
                         ? 'from-[#3B82F6]/30 to-[#06B6D4]/30 border-[#3B82F6] shadow-lg scale-105'
                         : 'from-white/10 to-white/5 border-white/10 hover:border-[#3B82F6]/50'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-white">Case #{caseItem.id.slice(-6)}</h3>
+                      <h3 className="font-semibold text-white">Case #{index + 1}</h3>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${
                           caseItem.status === 'open'
                             ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                            : caseItem.status === 'in_progress'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                             : caseItem.status === 'pending_closure'
                             ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
                         }`}
                       >
                         {caseItem.status === 'pending_closure' 
                           ? 'Pending' 
+                          : caseItem.status === 'in_progress'
+                          ? 'In Progress'
+                          : caseItem.status === 'open'
+                          ? 'Open'
                           : caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-300 line-clamp-2">{caseItem.issueDetails}</p>
                     <div className="mt-2 text-xs text-gray-400">
-                      💬 {caseItem.comments.length} comments
+                      💬 {caseItem.comments?.length || 0} comments
                     </div>
                   </div>
                 ))
@@ -204,13 +213,19 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
                       className={`px-4 py-2 rounded-full font-medium ${
                         selectedCase.status === 'open'
                           ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                          : selectedCase.status === 'in_progress'
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                           : selectedCase.status === 'pending_closure'
                           ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                          : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                          : 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
                       }`}
                     >
                       {selectedCase.status === 'pending_closure' 
                         ? 'Pending Closure' 
+                        : selectedCase.status === 'in_progress'
+                        ? 'In Progress'
+                        : selectedCase.status === 'open'
+                        ? 'Open'
                         : selectedCase.status.charAt(0).toUpperCase() + selectedCase.status.slice(1)}
                     </span>
                   </div>
@@ -220,6 +235,32 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
                       <span className="text-sm font-medium text-gray-400">Issue Description</span>
                       <p className="text-white mt-2">{selectedCase.issueDetails}</p>
                     </div>
+                    
+                    {/* Patient Information */}
+                    {selectedCase.patientId && typeof selectedCase.patientId === 'object' && 'name' in selectedCase.patientId && (
+                      <div className="bg-gradient-to-br from-[#06B6D4]/20 to-[#3B82F6]/20 p-4 rounded-xl border border-[#06B6D4]/30">
+                        <h4 className="font-bold text-white mb-2 text-sm">👤 Patient Information</h4>
+                        <button
+                          onClick={() => {
+                            const patientData = selectedCase.patientId as any;
+                            router.push(`/profile?userId=${patientData._id || patientData.id}`);
+                          }}
+                          className="text-[#06B6D4] text-lg font-semibold hover:text-[#22D3EE] transition-colors cursor-pointer underline text-left"
+                        >
+                          {(selectedCase.patientId as any).name}
+                        </button>
+                        <div className="text-sm text-gray-300 space-y-1 mt-2">
+                          <p>📧 {(selectedCase.patientId as any).email}</p>
+                          {(selectedCase.patientId as any).mobileNumber && (
+                            <p>📱 {(selectedCase.patientId as any).mobileNumber}</p>
+                          )}
+                          {(selectedCase.patientId as any).age && (
+                            <p>🎂 Age: {(selectedCase.patientId as any).age}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <span className="text-xs text-gray-400 uppercase">City</span>
@@ -235,12 +276,33 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
                   {/* Comments Section */}
                   <div className="mb-6">
                     <h3 className="font-bold text-white mb-4 text-lg">Comments & Progress</h3>
+                    
+                    {/* Add Comment - Positioned at Top */}
+                    {selectedCase.status !== 'closed' && (
+                      <div className="space-y-4 mb-6 pb-6 border-b border-white/10">
+                        <TextArea
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          placeholder="Add a comment about the patient's progress..."
+                          rows={3}
+                          className="bg-white/10 border-white/20 text-white placeholder-gray-500 rounded-lg"
+                        />
+                        <button
+                          onClick={handleAddComment}
+                          className="w-full py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all cursor-pointer"
+                        >
+                          Send Message
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Comments Display - Latest First */}
                     <div className="space-y-3 mb-4 max-h-80 overflow-y-auto">
-                      {selectedCase.comments.length === 0 ? (
+                      {!selectedCase.comments || selectedCase.comments.length === 0 ? (
                         <p className="text-gray-400 text-center py-8">No comments yet. Add one to start tracking progress!</p>
                       ) : (
                         [...selectedCase.comments].reverse().map((comment) => (
-                          <div key={comment.id} className="bg-white/5 p-4 rounded-lg border border-white/10">
+                          <div key={comment.id || comment._id} className="bg-white/5 p-4 rounded-lg border border-white/10">
                             <div className="flex justify-between items-start mb-2">
                               <div>
                                 <span className="font-medium text-[#3B82F6]">{comment.userName}</span>
@@ -261,24 +323,19 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
 
                   {selectedCase.status !== 'closed' && (
                     <div className="space-y-4 pt-4 border-t border-white/10">
-                      <TextArea
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Add a comment about the patient's progress..."
-                        rows={3}
-                        className="bg-white/10 border-white/20 text-white placeholder-gray-500 rounded-lg"
-                      />
                       <div className="flex gap-3">
                         <button
                           onClick={handleAddComment}
-                          className="px-6 py-2 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-medium rounded-lg hover:shadow-lg transition-all"
+                          disabled
+                          className="px-6 py-2 bg-gray-600 text-gray-400 font-medium rounded-lg cursor-not-allowed opacity-50"
+                          title="Use the message box above to add comments"
                         >
                           Add Comment
                         </button>
-                        {selectedCase.status === 'open' && (
+                        {(selectedCase.status === 'open' || selectedCase.status === 'in_progress') && (
                           <button
                             onClick={handleRequestClosure}
-                            className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-all"
+                            className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white font-medium rounded-lg transition-all cursor-pointer"
                           >
                             Request Closure
                           </button>
@@ -313,7 +370,7 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
               </div>
             ) : (
               unmappedCases.map((caseItem) => (
-                <div key={caseItem.id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
+                <div key={caseItem.id || caseItem._id} className="bg-gradient-to-br from-white/10 to-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur hover:border-[#3B82F6]/50 transition-all">
                   <h3 className="font-bold text-white mb-3 text-lg">New Case</h3>
                   <div className="space-y-3 text-sm mb-6">
                     <p className="text-gray-300">{caseItem.issueDetails}</p>
@@ -333,8 +390,8 @@ export default function PhysiotherapistDashboard({ user }: PhysiotherapistDashbo
                     )}
                   </div>
                   <button
-                    onClick={() => handlePickCase(caseItem.id)}
-                    className="w-full py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all"
+                    onClick={() => handlePickCase((caseItem.id || caseItem._id) as string)}
+                    className="w-full py-3 bg-gradient-to-r from-[#3B82F6] to-[#06B6D4] text-white font-bold rounded-lg hover:shadow-lg transition-all cursor-pointer"
                   >
                     Pick This Case
                   </button>
